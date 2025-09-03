@@ -36,7 +36,6 @@ module.exports = {
     moderation: {
         logChannelId: requireEnv('MODERATION_LOG_CHANNEL_ID'),
         joinLeaveLogChannelId: requireEnv('JOIN_LEAVE_LOG_CHANNEL_ID'),
-        dispatchVoiceChannelId: requireEnv('DISPATCH_VOICE_CHANNEL_ID'),
     },
 
     /**

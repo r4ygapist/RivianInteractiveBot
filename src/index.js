@@ -17,7 +17,6 @@ const economyManager = require('./roblox/economyManager');
 const aopManager = require('./roblox/aopManager');
 const rankTagManager = require('./roblox/rankTagManager');
 const joinLeaveNotifier = require('./roblox/joinLeaveNotifier');
-const dispatchManager = require('./roblox/dispatchManager');
 
 // Database Models for Moderation API
 const ModerationAction = require('./database/models/ModerationAction');
@@ -33,7 +32,6 @@ async function main() {
             intents: [
                 GatewayIntentBits.Guilds, 
                 GatewayIntentBits.GuildMembers,
-                GatewayIntentBits.GuildVoiceStates,
                 GatewayIntentBits.GuildPresences // Required for Vanity Roles
             ] 
         });
@@ -106,7 +104,6 @@ async function main() {
              res.status(200).json({ status: 'logged' });
         });
         app.post('/roblox/player-event', authMiddleware.verifyRobloxSecret, joinLeaveNotifier.handlePlayerEvent);
-        app.post('/roblox/dispatch-tts', authMiddleware.verifyRobloxSecret, dispatchManager.handleTtsRequest);
 
         const PORT = process.env.PORT || 10000;
         app.listen(PORT, () => {
@@ -123,7 +120,6 @@ async function main() {
             aopManager.init(readyClient);
             rankTagManager.init(readyClient);
             joinLeaveNotifier.init(readyClient);
-            dispatchManager.init(readyClient);
             
             console.log('[Managers] All systems initialized.');
         });
