@@ -17,12 +17,7 @@ const economyManager = require('./roblox/economyManager');
 const aopManager = require('./roblox/aopManager');
 const rankTagManager = require('./roblox/rankTagManager');
 const joinLeaveNotifier = require('./roblox/joinLeaveNotifier');
-const dispatchManager = require('./roblox/dispatchManager'); // Re-added
-
-// Database Models for Moderation API
-const ModerationAction = require('./database/models/ModerationAction');
-const ModerationRecord = require('./database/models/ModerationRecord');
-
+const dispatchManager = require('./roblox/dispatchManager');
 
 // --- Main Bot Function ---
 async function main() {
@@ -33,7 +28,7 @@ async function main() {
             intents: [
                 GatewayIntentBits.Guilds, 
                 GatewayIntentBits.GuildMembers,
-                GatewayIntentBits.GuildVoiceStates, // Re-added
+                GatewayIntentBits.GuildVoiceStates,
                 GatewayIntentBits.GuildPresences
             ] 
         });
@@ -85,15 +80,19 @@ async function main() {
         app.get('/aop/get', aopManager.handleGetAop);
         app.post('/roblox/player-event', authMiddleware.verifyRobloxSecret, joinLeaveNotifier.handlePlayerEvent);
 
-        // --- NEW: Player Down Dispatch Route ---
+        // --- Player Down Dispatch Route ---
         app.post('/roblox/player-down', authMiddleware.verifyRobloxSecret, async (req, res) => {
-            const { playerName, playerId, location } = req.body;
+            if (!client.isReady()) return res.status(503).json({ error: 'Discord client not ready.' });
+
+            const { playerName, playerId, location, status } = req.body;
             if (!playerName || !playerId || !location) {
                 return res.status(400).json({ error: 'Missing required payload fields.' });
             }
 
-            // 1. Queue the TTS announcement
-            const ttsMessage = `Unit down, ${playerName}, at ${location}. All units respond.`;
+            // ===============================================================
+            // EDIT THIS LINE TO CHANGE WHAT THE BOT SAYS IN THE VOICE CHANNEL
+            // ===============================================================
+            const ttsMessage = `All Units Dispatch, 10-99 Officer down, ${playerName}, at ${location}. Status is ${status}. All units respond. Immediate Priority Number One.`;
             dispatchManager.queueTts(ttsMessage);
 
             // 2. Send the Display Components V2 message
@@ -102,20 +101,33 @@ async function main() {
                 if (dispatchChannel) {
                     const thumbnailUrl = `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${playerId}&size=150x150&format=Png&isCircular=false`;
                     
+                    const pingContent = config.supportSystem.staffRoleIds.length > 0
+                        ? config.supportSystem.staffRoleIds.map(id => `<@&${id}>`).join(' ')
+                        : '';
+                    
+                    // ===============================================================
+                    // EDIT THE TEXT BELOW TO CHANGE THE DISPATCH MESSAGE
+                    // ===============================================================
                     const mainContent = [
                         `# 🚨 Officer Down`,
                         `**Unit:** [${playerName}](https://www.roblox.com/users/${playerId}/profile)`,
                         `**Last Known Location:** \`${location}\``,
-                        `**Status:** <@&${config.discord.guildId}> Unresponsive`, // Pings @everyone in the server
+                        `**Status:** \`@everyone\` ${status}`, // Placeholder for pinging, as it's not directly supported in components
                         `\n_All available units are requested to respond immediately._`
                     ].join('\n');
 
+                    // FIX: The thumbnail is an accessory to the section, not the container
                     const thumbnail = new ThumbnailBuilder().setURL(thumbnailUrl);
                     const mainText = new TextDisplayBuilder().setContent(mainContent);
-                    const mainSection = new SectionBuilder().addTextDisplayComponents(mainText).setThumbnailAccessory(thumbnail);
-                    const container = new ContainerBuilder().setAccentColor(0xDD2E44).addSectionComponents(mainSection);
+                    const mainSection = new SectionBuilder()
+                        .addTextDisplayComponents(mainText)
+                        .setThumbnailAccessory(thumbnail); // <-- Correctly attached here
                     
-                    await dispatchChannel.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
+                    const container = new ContainerBuilder()
+                        .setAccentColor(0xDD2E44)
+                        .addSectionComponents(mainSection);
+                    
+                    await dispatchChannel.send({ content: pingContent, components: [container], flags: MessageFlags.IsComponentsV2 });
                 }
             } catch (error) {
                 console.error('[Dispatch] Failed to send text alert:', error);
@@ -139,7 +151,7 @@ async function main() {
             aopManager.init(readyClient);
             rankTagManager.init(readyClient);
             joinLeaveNotifier.init(readyClient);
-            dispatchManager.init(readyClient); // Re-added
+            dispatchManager.init(readyClient);
             
             console.log('[Managers] All systems initialized.');
         });
@@ -159,3 +171,4 @@ process.on('unhandledRejection', error => {
 });
 
 main();
+
