@@ -14,7 +14,8 @@ let discordClient;
  */
 async function createTTSStream(text) {
     try {
-        const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=en&client=tw-ob`;
+        // By changing "tl=en" to "tl=en-gb", we switch to a British English voice.
+        const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=en-gb&client=tw-ob`;
         const response = await axios({
             method: 'get',
             url: ttsUrl,
