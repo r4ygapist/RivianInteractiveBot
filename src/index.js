@@ -92,7 +92,7 @@ async function main() {
             // ===============================================================
             // EDIT THIS LINE TO CHANGE WHAT THE BOT SAYS IN THE VOICE CHANNEL
             // ===============================================================
-            const ttsMessage = `All Units Dispatch, 10-99 Officer down, ${playerName}, at ${location}. Status is ${status}. All units respond. Immediate Priority Number One.`;
+            const ttsMessage = `Officer down, ${playerName}, at ${location}. Status is ${status}. All units respond.`;
             dispatchManager.queueTts(ttsMessage);
 
             // 2. Send the Display Components V2 message
@@ -112,22 +112,25 @@ async function main() {
                         `# 🚨 Officer Down`,
                         `**Unit:** [${playerName}](https://www.roblox.com/users/${playerId}/profile)`,
                         `**Last Known Location:** \`${location}\``,
-                        `**Status:** \`@everyone\` ${status}`, // Placeholder for pinging, as it's not directly supported in components
+                        `**Status:** ${status}`,
                         `\n_All available units are requested to respond immediately._`
                     ].join('\n');
 
-                    // FIX: The thumbnail is an accessory to the section, not the container
                     const thumbnail = new ThumbnailBuilder().setURL(thumbnailUrl);
                     const mainText = new TextDisplayBuilder().setContent(mainContent);
                     const mainSection = new SectionBuilder()
                         .addTextDisplayComponents(mainText)
-                        .setThumbnailAccessory(thumbnail); // <-- Correctly attached here
+                        .setThumbnailAccessory(thumbnail);
                     
                     const container = new ContainerBuilder()
                         .setAccentColor(0xDD2E44)
                         .addSectionComponents(mainSection);
                     
-                    await dispatchChannel.send({ content: pingContent, components: [container], flags: MessageFlags.IsComponentsV2 });
+                    // FIX: Send pings in a separate message first, then send the component.
+                    if (pingContent) {
+                        await dispatchChannel.send({ content: pingContent });
+                    }
+                    await dispatchChannel.send({ components: [container], flags: MessageFlags.IsComponents_V2 });
                 }
             } catch (error) {
                 console.error('[Dispatch] Failed to send text alert:', error);
