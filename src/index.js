@@ -24,13 +24,13 @@ async function main() {
     try {
         await connectDB();
 
-        const client = new Client({ 
+        const client = new Client({
             intents: [
-                GatewayIntentBits.Guilds, 
+                GatewayIntentBits.Guilds,
                 GatewayIntentBits.GuildMembers,
                 GatewayIntentBits.GuildVoiceStates,
                 GatewayIntentBits.GuildPresences
-            ] 
+            ]
         });
         client.commands = new Collection();
 
@@ -67,10 +67,10 @@ async function main() {
         // --- Set up Web Server FIRST ---
         const app = express();
         app.use(express.json());
-        
+
         // --- Define Web Server API Routes ---
         app.get('/', (req, res) => res.status(200).send('RiviSync bot is running and API is available.'));
-        
+
         app.post('/heartbeat', serverManager.handleHeartbeat);
         app.post('/toll', tollManager.handleToll);
         app.post('/update-data', dataManager.handleDataUpdate);
@@ -100,11 +100,11 @@ async function main() {
                 const dispatchChannel = await client.channels.fetch(config.moderation.dispatchTextChannelId);
                 if (dispatchChannel) {
                     const thumbnailUrl = `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${playerId}&size=150x150&format=Png&isCircular=false`;
-                    
+
                     const pingContent = config.supportSystem.staffRoleIds.length > 0
                         ? config.supportSystem.staffRoleIds.map(id => `<@&${id}>`).join(' ')
                         : '';
-                    
+
                     // ===============================================================
                     // EDIT THE TEXT BELOW TO CHANGE THE DISPATCH MESSAGE
                     // ===============================================================
@@ -116,21 +116,33 @@ async function main() {
                         `\n_All available units are requested to respond immediately._`
                     ].join('\n');
 
-                    const thumbnail = new ThumbnailBuilder().setURL(thumbnailUrl);
-                    const mainText = new TextDisplayBuilder().setContent(mainContent);
-                    const mainSection = new SectionBuilder()
-                        .addTextDisplayComponents(mainText)
-                        .setThumbnailAccessory(thumbnail);
+                    // FIX: Construct the component payload more directly
+                    const componentPayload = {
+                      accent_color: 0xDD2E44,
+                      components: [
+                        {
+                          type: 31, // Section type
+                          components: [
+                            {
+                              type: 32, // Text Display type
+                              content: mainContent,
+                            }
+                          ],
+                          accessory: {
+                            type: 33, // Thumbnail Accessory type
+                            url: thumbnailUrl,
+                            description: `${playerName}'s Avatar`,
+                            size: 1, // Large
+                          },
+                        }
+                      ]
+                    };
                     
-                    const container = new ContainerBuilder()
-                        .setAccentColor(0xDD2E44)
-                        .addSectionComponents(mainSection);
-                    
-                    // FIX: Send pings in a separate message first, then send the component.
                     if (pingContent) {
                         await dispatchChannel.send({ content: pingContent });
                     }
-                    await dispatchChannel.send({ components: [container], flags: MessageFlags.IsComponents_V2 });
+                    // FIX: Pass the payload directly and ensure the flag is correct.
+                    await dispatchChannel.send({ components: [componentPayload], flags: MessageFlags.IsComponentsV2 });
                 }
             } catch (error) {
                 console.error('[Dispatch] Failed to send text alert:', error);
@@ -138,7 +150,7 @@ async function main() {
 
             res.status(200).json({ status: 'ok' });
         });
-        
+
         const PORT = process.env.PORT || 10000;
         app.listen(PORT, () => {
             console.log(`[Web Server] Listening on port ${PORT}.`);
@@ -155,7 +167,7 @@ async function main() {
             rankTagManager.init(readyClient);
             joinLeaveNotifier.init(readyClient);
             dispatchManager.init(readyClient);
-            
+
             console.log('[Managers] All systems initialized.');
         });
 
