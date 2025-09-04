@@ -1,5 +1,6 @@
+// roblox/dispatchManager.js
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, NoSubscriberBehavior, VoiceConnectionStatus, entersState } = require('@discordjs/voice');
-const { Client, GatewayIntentBits } = require('discord.js');
+const { GatewayIntentBits } = require('discord.js');
 const config = require('../config');
 const axios = require('axios');
 
@@ -9,7 +10,7 @@ let voiceConnection = null;
 let discordClient;
 
 /**
- * Creates a playable audio stream from text by fetching it from a TTS service.
+ * Creates a playable audio stream from text using Google's TTS service.
  */
 async function createTTSStream(text) {
     try {
@@ -31,6 +32,7 @@ async function createTTSStream(text) {
  * Connects the bot to the configured dispatch voice channel.
  */
 async function connectToChannel() {
+    if (!discordClient) return;
     try {
         const guild = await discordClient.guilds.fetch(config.discord.guildId);
         if (!guild) return;
@@ -49,12 +51,12 @@ async function connectToChannel() {
 
         voiceConnection.on(VoiceConnectionStatus.Ready, () => {
             console.log('[Dispatch] Voice connection is ready.');
-            processQueue();
+            processQueue(); // Start processing any queued items on connect
         });
 
         voiceConnection.on(VoiceConnectionStatus.Disconnected, async () => {
             try {
-                console.log('[Dispatch] Voice connection disconnected. Reconnecting...');
+                console.log('[Dispatch] Voice connection disconnected. Attempting to reconnect...');
                 await Promise.race([
                     entersState(voiceConnection, VoiceConnectionStatus.Signalling, 5_000),
                     entersState(voiceConnection, VoiceConnectionStatus.Connecting, 5_000),
@@ -63,7 +65,7 @@ async function connectToChannel() {
                 console.log('[Dispatch] Reconnection failed, destroying connection.');
                 if (voiceConnection) voiceConnection.destroy();
                 voiceConnection = null;
-                setTimeout(() => connectToChannel(), 5000); // Attempt to fully reconnect after 5s
+                setTimeout(() => connectToChannel(), 5000); // Attempt a full reconnect after 5s
             }
         });
 
@@ -100,7 +102,7 @@ async function processQueue() {
             subscription?.unsubscribe();
             player.stop();
             isPlaying = false;
-            processQueue();
+            setTimeout(processQueue, 500); // Small delay before next item
         });
 
         player.once('error', error => {
@@ -119,15 +121,13 @@ async function processQueue() {
 }
 
 /**
- * Handles incoming TTS requests from Roblox.
+ * Adds a new TTS announcement to the queue.
+ * @param {string} text - The text to be spoken.
  */
-async function handleTtsRequest(req, res) {
-    const { text } = req.body;
-    if (!text) return res.status(400).json({ status: "error", message: "Missing 'text' in payload." });
-    
+function queueTts(text) {
+    if (!text) return;
     announcementQueue.push(text);
     processQueue();
-    res.status(200).json({ status: "queued" });
 }
 
 module.exports = {
@@ -139,6 +139,6 @@ module.exports = {
         }
         connectToChannel();
     },
-    handleTtsRequest,
+    queueTts, // This now correctly exports the function
 };
 
