@@ -31,11 +31,13 @@ module.exports = {
     },
     
     /**
-     * Moderation System Configuration
+     * Moderation & Dispatch System Configuration
      */
     moderation: {
         logChannelId: requireEnv('MODERATION_LOG_CHANNEL_ID'),
         joinLeaveLogChannelId: requireEnv('JOIN_LEAVE_LOG_CHANNEL_ID'),
+        dispatchVoiceChannelId: requireEnv('DISPATCH_VOICE_CHANNEL_ID'),
+        dispatchTextChannelId: requireEnv('DISPATCH_TEXT_CHANNEL_ID'),
     },
 
     /**
@@ -104,4 +106,3 @@ module.exports = {
         staffRoleIds: process.env.SUPPORT_STAFF_ROLES ? process.env.SUPPORT_STAFF_ROLES.split(',') : [],
     }
 };
-

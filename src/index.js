@@ -1,7 +1,7 @@
 // --- Core Imports ---
 const fs = require('fs');
 const path = require('path');
-const { Client, Collection, GatewayIntentBits, Events } = require('discord.js');
+const { Client, Collection, GatewayIntentBits, Events, ContainerBuilder, SectionBuilder, TextDisplayBuilder, ThumbnailBuilder, MessageFlags } = require('discord.js');
 const express = require('express');
 
 // --- Custom Module Imports ---
@@ -17,6 +17,7 @@ const economyManager = require('./roblox/economyManager');
 const aopManager = require('./roblox/aopManager');
 const rankTagManager = require('./roblox/rankTagManager');
 const joinLeaveNotifier = require('./roblox/joinLeaveNotifier');
+const dispatchManager = require('./roblox/dispatchManager'); // Re-added
 
 // Database Models for Moderation API
 const ModerationAction = require('./database/models/ModerationAction');
@@ -32,7 +33,8 @@ async function main() {
             intents: [
                 GatewayIntentBits.Guilds, 
                 GatewayIntentBits.GuildMembers,
-                GatewayIntentBits.GuildPresences // Required for Vanity Roles
+                GatewayIntentBits.GuildVoiceStates, // Re-added
+                GatewayIntentBits.GuildPresences
             ] 
         });
         client.commands = new Collection();
@@ -74,8 +76,6 @@ async function main() {
         // --- Define Web Server API Routes ---
         app.get('/', (req, res) => res.status(200).send('RiviSync bot is running and API is available.'));
         
-        // Define all other routes before the bot logs in.
-        // Note: The handlers themselves will wait for the client to be ready if needed.
         app.post('/heartbeat', serverManager.handleHeartbeat);
         app.post('/toll', tollManager.handleToll);
         app.post('/update-data', dataManager.handleDataUpdate);
@@ -83,28 +83,47 @@ async function main() {
         app.get('/users/get-discord-data', rankTagManager.getDiscordData);
         app.post('/aop/set', aopManager.handleSetAop);
         app.get('/aop/get', aopManager.handleGetAop);
-        app.post('/moderation/get-actions', authMiddleware.verifyRobloxSecret, async (req, res) => {
-            const { userIds } = req.body;
-            if (!Array.isArray(userIds)) return res.status(400).json({ error: 'Invalid payload' });
-            const actions = await ModerationAction.find({ targetRobloxId: { $in: userIds }, completed: false });
-            if (actions.length > 0) { return res.status(200).json({ status: "found", actions }); }
-            return res.status(200).json({ status: "not_found" });
-        });
-        app.post('/moderation/complete-action/:actionId', authMiddleware.verifyRobloxSecret, async (req, res) => {
-            const { actionId } = req.params;
-            const result = await ModerationAction.findByIdAndUpdate(actionId, { completed: true });
-            if (result) {
-                console.log(`[Moderation] Completed action ${actionId}.`);
-                return res.status(200).json({ status: 'completed' });
-            }
-            return res.status(404).json({ status: 'not_found' });
-        });
-        app.post('/moderation/log', authMiddleware.verifyRobloxSecret, (req, res) => {
-             console.log('[Moderation] Received log from game:', req.body);
-             res.status(200).json({ status: 'logged' });
-        });
         app.post('/roblox/player-event', authMiddleware.verifyRobloxSecret, joinLeaveNotifier.handlePlayerEvent);
 
+        // --- NEW: Player Down Dispatch Route ---
+        app.post('/roblox/player-down', authMiddleware.verifyRobloxSecret, async (req, res) => {
+            const { playerName, playerId, location } = req.body;
+            if (!playerName || !playerId || !location) {
+                return res.status(400).json({ error: 'Missing required payload fields.' });
+            }
+
+            // 1. Queue the TTS announcement
+            const ttsMessage = `Unit down, ${playerName}, at ${location}. All units respond.`;
+            dispatchManager.queueTts(ttsMessage);
+
+            // 2. Send the Display Components V2 message
+            try {
+                const dispatchChannel = await client.channels.fetch(config.moderation.dispatchTextChannelId);
+                if (dispatchChannel) {
+                    const thumbnailUrl = `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${playerId}&size=150x150&format=Png&isCircular=false`;
+                    
+                    const mainContent = [
+                        `# 🚨 Officer Down`,
+                        `**Unit:** [${playerName}](https://www.roblox.com/users/${playerId}/profile)`,
+                        `**Last Known Location:** \`${location}\``,
+                        `**Status:** <@&${config.discord.guildId}> Unresponsive`, // Pings @everyone in the server
+                        `\n_All available units are requested to respond immediately._`
+                    ].join('\n');
+
+                    const thumbnail = new ThumbnailBuilder().setURL(thumbnailUrl);
+                    const mainText = new TextDisplayBuilder().setContent(mainContent);
+                    const mainSection = new SectionBuilder().addTextDisplayComponents(mainText).setThumbnailAccessory(thumbnail);
+                    const container = new ContainerBuilder().setAccentColor(0xDD2E44).addSectionComponents(mainSection);
+                    
+                    await dispatchChannel.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
+                }
+            } catch (error) {
+                console.error('[Dispatch] Failed to send text alert:', error);
+            }
+
+            res.status(200).json({ status: 'ok' });
+        });
+        
         const PORT = process.env.PORT || 10000;
         app.listen(PORT, () => {
             console.log(`[Web Server] Listening on port ${PORT}.`);
@@ -120,6 +139,7 @@ async function main() {
             aopManager.init(readyClient);
             rankTagManager.init(readyClient);
             joinLeaveNotifier.init(readyClient);
+            dispatchManager.init(readyClient); // Re-added
             
             console.log('[Managers] All systems initialized.');
         });
