@@ -51,21 +51,26 @@ async function connectToChannel() {
 
         voiceConnection.on(VoiceConnectionStatus.Ready, () => {
             console.log('[Dispatch] Voice connection is ready.');
-            processQueue(); // Start processing any queued items on connect
+            processQueue();
         });
 
+        // FIX: More robust handling for disconnects and IP discovery errors.
         voiceConnection.on(VoiceConnectionStatus.Disconnected, async () => {
             try {
-                console.log('[Dispatch] Voice connection disconnected. Attempting to reconnect...');
+                // Wait up to 5 seconds for the connection to signal it's trying to reconnect.
                 await Promise.race([
                     entersState(voiceConnection, VoiceConnectionStatus.Signalling, 5_000),
                     entersState(voiceConnection, VoiceConnectionStatus.Connecting, 5_000),
                 ]);
+                // If the connection recovers on its own, we don't need to do anything.
             } catch (error) {
-                console.log('[Dispatch] Reconnection failed, destroying connection.');
-                if (voiceConnection) voiceConnection.destroy();
+                // If it doesn't recover, destroy the connection fully and try to reconnect.
+                console.log('[Dispatch] Reconnection failed. Destroying and recreating connection.');
+                if (voiceConnection.state.status !== VoiceConnectionStatus.Destroyed) {
+                    voiceConnection.destroy();
+                }
                 voiceConnection = null;
-                setTimeout(() => connectToChannel(), 5000); // Attempt a full reconnect after 5s
+                setTimeout(() => connectToChannel(), 5000); // Wait 5 seconds before retrying.
             }
         });
 
@@ -102,7 +107,7 @@ async function processQueue() {
             subscription?.unsubscribe();
             player.stop();
             isPlaying = false;
-            setTimeout(processQueue, 500); // Small delay before next item
+            setTimeout(processQueue, 500);
         });
 
         player.once('error', error => {
@@ -139,6 +144,6 @@ module.exports = {
         }
         connectToChannel();
     },
-    queueTts, // This now correctly exports the function
+    queueTts,
 };
 

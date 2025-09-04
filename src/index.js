@@ -89,25 +89,15 @@ async function main() {
                 return res.status(400).json({ error: 'Missing required payload fields.' });
             }
 
-            // ===============================================================
-            // EDIT THIS LINE TO CHANGE WHAT THE BOT SAYS IN THE VOICE CHANNEL
-            // ===============================================================
             const ttsMessage = `Officer down, ${playerName}, at ${location}. Status is ${status}. All units respond.`;
             dispatchManager.queueTts(ttsMessage);
 
-            // 2. Send the Display Components V2 message
             try {
                 const dispatchChannel = await client.channels.fetch(config.moderation.dispatchTextChannelId);
                 if (dispatchChannel) {
                     const thumbnailUrl = `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${playerId}&size=150x150&format=Png&isCircular=false`;
-
-                    const pingContent = config.supportSystem.staffRoleIds.length > 0
-                        ? config.supportSystem.staffRoleIds.map(id => `<@&${id}>`).join(' ')
-                        : '';
-
-                    // ===============================================================
-                    // EDIT THE TEXT BELOW TO CHANGE THE DISPATCH MESSAGE
-                    // ===============================================================
+                    const pingContent = config.supportSystem.staffRoleIds.length > 0 ? config.supportSystem.staffRoleIds.map(id => `<@&${id}>`).join(' ') : '';
+                    
                     const mainContent = [
                         `# 🚨 Officer Down`,
                         `**Unit:** [${playerName}](https://www.roblox.com/users/${playerId}/profile)`,
@@ -116,33 +106,18 @@ async function main() {
                         `\n_All available units are requested to respond immediately._`
                     ].join('\n');
 
-                    // FIX: Construct the component payload more directly
-                    const componentPayload = {
-                      accent_color: 0xDD2E44,
-                      components: [
-                        {
-                          type: 31, // Section type
-                          components: [
-                            {
-                              type: 32, // Text Display type
-                              content: mainContent,
-                            }
-                          ],
-                          accessory: {
-                            type: 33, // Thumbnail Accessory type
-                            url: thumbnailUrl,
-                            description: `${playerName}'s Avatar`,
-                            size: 1, // Large
-                          },
-                        }
-                      ]
-                    };
+                    const thumbnail = new ThumbnailBuilder().setURL(thumbnailUrl);
+                    const mainText = new TextDisplayBuilder().setContent(mainContent);
+                    const mainSection = new SectionBuilder().addTextDisplayComponents(mainText).setThumbnailAccessory(thumbnail);
                     
+                    const container = new ContainerBuilder().setAccentColor(0xDD2E44).addSectionComponents(mainSection);
+                    
+                    // FIX: Send pings in a separate message first, then send the component.
                     if (pingContent) {
                         await dispatchChannel.send({ content: pingContent });
                     }
-                    // FIX: Pass the payload directly and ensure the flag is correct.
-                    await dispatchChannel.send({ components: [componentPayload], flags: MessageFlags.IsComponentsV2 });
+                    // FIX: Send the component without the 'content' field.
+                    await dispatchChannel.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
                 }
             } catch (error) {
                 console.error('[Dispatch] Failed to send text alert:', error);
@@ -160,7 +135,6 @@ async function main() {
         client.once(Events.ClientReady, async readyClient => {
             console.log(`✅ Discord Bot Ready! Logged in as ${readyClient.user.tag}`);
 
-            // Initialize all managers that depend on the client being ready
             serverManager.init(readyClient, config);
             tollManager.init(readyClient);
             aopManager.init(readyClient);
