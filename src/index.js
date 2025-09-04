@@ -8,6 +8,7 @@ const express = require('express');
 const config = require('./config');
 const connectDB = require('./database/database');
 const authMiddleware = require('./roblox/authMiddleware');
+const VerifiedUser = require('./database/models/VerifiedUser'); // Needed for role check
 
 // Roblox Managers
 const serverManager = require('./roblox/serverManager');
@@ -80,6 +81,40 @@ async function main() {
         app.get('/aop/get', aopManager.handleGetAop);
         app.post('/roblox/player-event', authMiddleware.verifyRobloxSecret, joinLeaveNotifier.handlePlayerEvent);
 
+        // --- Role Check Whitelist Route ---
+        app.get('/roblox/check-role', authMiddleware.verifyRobloxSecret, async (req, res) => {
+            if (!client.isReady()) return res.status(503).json({ error: 'Discord client not ready.' });
+            
+            const { playerId } = req.query;
+            if (!playerId) {
+                return res.status(400).json({ error: 'Missing playerId query parameter.' });
+            }
+
+            try {
+                const verifiedUser = await VerifiedUser.findOne({ robloxId: playerId });
+                if (!verifiedUser) {
+                    // Not verified with the bot, so they can't have the role.
+                    return res.status(200).json({ hasRole: false });
+                }
+
+                const guild = await client.guilds.fetch(config.discord.guildId);
+                const member = await guild.members.fetch(verifiedUser.discordId).catch(() => null);
+
+                if (!member) {
+                    // Verified, but not in the Discord server.
+                    return res.status(200).json({ hasRole: false });
+                }
+
+                const hasRole = member.roles.cache.has(config.discord.requiredRoleId);
+                res.status(200).json({ hasRole });
+
+            } catch (error) {
+                console.error('[Role Check] Failed to check role:', error);
+                // Fail safe: If an error occurs, assume they don't have the role.
+                res.status(500).json({ hasRole: false });
+            }
+        });
+
         // --- Player Down Dispatch Route ---
         app.post('/roblox/player-down', authMiddleware.verifyRobloxSecret, async (req, res) => {
             if (!client.isReady()) return res.status(503).json({ error: 'Discord client not ready.' });
@@ -112,11 +147,9 @@ async function main() {
                     
                     const container = new ContainerBuilder().setAccentColor(0xDD2E44).addSectionComponents(mainSection);
                     
-                    // FIX: Send pings in a separate message first, then send the component.
                     if (pingContent) {
                         await dispatchChannel.send({ content: pingContent });
                     }
-                    // FIX: Send the component without the 'content' field.
                     await dispatchChannel.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
                 }
             } catch (error) {
@@ -161,3 +194,4 @@ process.on('unhandledRejection', error => {
 
 main();
 
+    

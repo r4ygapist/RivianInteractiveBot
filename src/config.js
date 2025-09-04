@@ -24,6 +24,7 @@ module.exports = {
         token: requireEnv('DISCORD_TOKEN'),
         clientId: requireEnv('DISCORD_CLIENT_ID'),
         guildId: requireEnv('DISCORD_GUILD_ID'),
+        requiredRoleId: process.env.REQUIRED_ROLE_ID, // Add this line
         autoroleId: process.env.AUTOROLE_ID,
         verifyChannelId: process.env.VERIFY_CHANNEL_ID,
         supportChannelId: process.env.SUPPORT_CHANNEL_ID,
@@ -31,7 +32,7 @@ module.exports = {
     },
     
     /**
-     * Moderation & Dispatch System Configuration
+     * Moderation System Configuration
      */
     moderation: {
         logChannelId: requireEnv('MODERATION_LOG_CHANNEL_ID'),
@@ -106,3 +107,4 @@ module.exports = {
         staffRoleIds: process.env.SUPPORT_STAFF_ROLES ? process.env.SUPPORT_STAFF_ROLES.split(',') : [],
     }
 };
+
