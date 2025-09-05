@@ -8,7 +8,8 @@ const express = require('express');
 const config = require('./config');
 const connectDB = require('./database/database');
 const authMiddleware = require('./roblox/authMiddleware');
-const VerifiedUser = require('./database/models/VerifiedUser'); // Needed for role check
+const VerifiedUser = require('./database/models/VerifiedUser');
+const DispatchSettings = require('./database/models/DispatchSettings'); // <-- Import the new model
 
 // Roblox Managers
 const serverManager = require('./roblox/serverManager');
@@ -93,7 +94,6 @@ async function main() {
             try {
                 const verifiedUser = await VerifiedUser.findOne({ robloxId: playerId });
                 if (!verifiedUser) {
-                    // Not verified with the bot, so they can't have the role.
                     return res.status(200).json({ hasRole: false });
                 }
 
@@ -101,7 +101,6 @@ async function main() {
                 const member = await guild.members.fetch(verifiedUser.discordId).catch(() => null);
 
                 if (!member) {
-                    // Verified, but not in the Discord server.
                     return res.status(200).json({ hasRole: false });
                 }
 
@@ -110,7 +109,6 @@ async function main() {
 
             } catch (error) {
                 console.error('[Role Check] Failed to check role:', error);
-                // Fail safe: If an error occurs, assume they don't have the role.
                 res.status(500).json({ hasRole: false });
             }
         });
@@ -130,9 +128,18 @@ async function main() {
             try {
                 const dispatchChannel = await client.channels.fetch(config.moderation.dispatchTextChannelId);
                 if (dispatchChannel) {
-                    const thumbnailUrl = `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${playerId}&size=150x150&format=Png&isCircular=false`;
-                    const pingContent = config.supportSystem.staffRoleIds.length > 0 ? config.supportSystem.staffRoleIds.map(id => `<@&${id}>`).join(' ') : '';
+                    // --- MODIFICATION START ---
+                    // Fetch dispatch settings from the database
+                    const settings = await DispatchSettings.findOne({ guildId: config.discord.guildId });
+
+                    // Build the ping content based on the roles in the database
+                    const pingContent = (settings && settings.pingRoleIds.length > 0)
+                        ? settings.pingRoleIds.map(id => `<@&${id}>`).join(' ')
+                        : '';
+                    // --- MODIFICATION END ---
                     
+                    const thumbnailUrl = `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${playerId}&size=150x150&format=Png&isCircular=false`;
+
                     const mainContent = [
                         `# 🚨 Officer Down`,
                         `**Unit:** [${playerName}](https://www.roblox.com/users/${playerId}/profile)`,
@@ -194,4 +201,3 @@ process.on('unhandledRejection', error => {
 
 main();
 
-    
