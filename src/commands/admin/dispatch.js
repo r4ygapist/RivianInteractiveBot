@@ -50,6 +50,7 @@ module.exports = {
 
     async execute(interaction) {
         const settings = await getSettings(interaction.guild.id);
+        const subcommandGroup = interaction.options.getSubcommandGroup();
         const subcommand = interaction.options.getSubcommand();
         
         await interaction.deferReply({ ephemeral: true });
@@ -84,38 +85,41 @@ module.exports = {
             });
         }
 
-        if (subcommand === 'add') {
+        if (subcommandGroup === 'ping') {
             const role = interaction.options.getRole('role');
-            if (settings.pingRoleIds.includes(role.id)) {
-                return interaction.editReply(`⚠️ The role ${role} is already on the ping list.`);
+            if (subcommand === 'add') {
+                if (settings.pingRoleIds.includes(role.id)) {
+                    return interaction.editReply(`⚠️ The role ${role} is already on the ping list.`);
+                }
+                settings.pingRoleIds.push(role.id);
+                await settings.save();
+                return interaction.editReply(`✅ The role ${role} has been **added** to the dispatch ping list.`);
             }
-            settings.pingRoleIds.push(role.id);
-            await settings.save();
-            return interaction.editReply(`✅ The role ${role} has been **added** to the dispatch ping list.`);
-        }
-
-        if (subcommand === 'remove') {
-            const role = interaction.options.getRole('role');
-            if (!settings.pingRoleIds.includes(role.id)) {
-                return interaction.editReply(`⚠️ The role ${role} is not on the ping list.`);
+    
+            if (subcommand === 'remove') {
+                if (!settings.pingRoleIds.includes(role.id)) {
+                    return interaction.editReply(`⚠️ The role ${role} is not on the ping list.`);
+                }
+                settings.pingRoleIds = settings.pingRoleIds.filter(id => id !== role.id);
+                await settings.save();
+                return interaction.editReply(`✅ The role ${role} has been **removed** from the dispatch ping list.`);
             }
-            settings.pingRoleIds = settings.pingRoleIds.filter(id => id !== role.id);
-            await settings.save();
-            return interaction.editReply(`✅ The role ${role} has been **removed** from the dispatch ping list.`);
         }
         
-        if (subcommand === 'toggle') {
-            const enabled = interaction.options.getBoolean('enabled');
-            settings.ttsEnabled = enabled;
-            await settings.save();
-            return interaction.editReply(`✅ TTS announcements have been **${enabled ? 'enabled' : 'disabled'}**.`);
-        }
-
-        if (subcommand === 'set-message') {
-            const template = interaction.options.getString('template');
-            settings.ttsMessage = template;
-            await settings.save();
-            return interaction.editReply(`✅ The TTS message template has been updated to:\n\`\`\`${template}\`\`\``);
+        if (subcommandGroup === 'tts') {
+            if (subcommand === 'toggle') {
+                const enabled = interaction.options.getBoolean('enabled');
+                settings.ttsEnabled = enabled;
+                await settings.save();
+                return interaction.editReply(`✅ TTS announcements have been **${enabled ? 'enabled' : 'disabled'}**.`);
+            }
+    
+            if (subcommand === 'set-message') {
+                const template = interaction.options.getString('template');
+                settings.ttsMessage = template;
+                await settings.save();
+                return interaction.editReply(`✅ The TTS message template has been updated to:\n\`\`\`${template}\`\`\``);
+            }
         }
     },
 };

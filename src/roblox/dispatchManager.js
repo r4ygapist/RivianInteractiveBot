@@ -9,9 +9,6 @@ let isPlaying = false;
 let voiceConnection = null;
 let discordClient;
 
-/**
- * Creates a playable audio stream from text using Google's TTS service.
- */
 async function createTTSStream(text) {
     try {
         const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=en&client=tw-ob`;
@@ -28,9 +25,6 @@ async function createTTSStream(text) {
     }
 }
 
-/**
- * Connects the bot to the configured dispatch voice channel.
- */
 async function connectToChannel() {
     if (!discordClient) return;
     try {
@@ -54,23 +48,21 @@ async function connectToChannel() {
             processQueue();
         });
 
-        // FIX: More robust handling for disconnects and IP discovery errors.
         voiceConnection.on(VoiceConnectionStatus.Disconnected, async () => {
             try {
-                // Wait up to 5 seconds for the connection to signal it's trying to reconnect.
+                console.log('[Dispatch] Voice connection disconnected. Attempting to reconnect...');
                 await Promise.race([
                     entersState(voiceConnection, VoiceConnectionStatus.Signalling, 5_000),
                     entersState(voiceConnection, VoiceConnectionStatus.Connecting, 5_000),
                 ]);
-                // If the connection recovers on its own, we don't need to do anything.
             } catch (error) {
-                // If it doesn't recover, destroy the connection fully and try to reconnect.
-                console.log('[Dispatch] Reconnection failed. Destroying and recreating connection.');
+                console.log('[Dispatch] Reconnection failed, destroying connection.');
                 if (voiceConnection.state.status !== VoiceConnectionStatus.Destroyed) {
                     voiceConnection.destroy();
                 }
                 voiceConnection = null;
-                setTimeout(() => connectToChannel(), 5000); // Wait 5 seconds before retrying.
+                // Add a delay before attempting a full reconnect.
+                setTimeout(() => connectToChannel(), 10000); 
             }
         });
 
@@ -79,9 +71,6 @@ async function connectToChannel() {
     }
 }
 
-/**
- * Processes the next announcement in the queue.
- */
 async function processQueue() {
     if (isPlaying || announcementQueue.length === 0 || !voiceConnection || voiceConnection.state.status !== VoiceConnectionStatus.Ready) {
         return;
@@ -104,7 +93,7 @@ async function processQueue() {
         player.play(resource);
 
         player.once('idle', () => {
-            subscription?.unsubscribe();
+            if (subscription) subscription.unsubscribe();
             player.stop();
             isPlaying = false;
             setTimeout(processQueue, 500);
@@ -112,7 +101,7 @@ async function processQueue() {
 
         player.once('error', error => {
             console.error('[Dispatch] Audio Player Error:', error);
-            subscription?.unsubscribe();
+            if (subscription) subscription.unsubscribe();
             player.stop();
             isPlaying = false;
             processQueue();
@@ -125,10 +114,6 @@ async function processQueue() {
     }
 }
 
-/**
- * Adds a new TTS announcement to the queue.
- * @param {string} text - The text to be spoken.
- */
 function queueTts(text) {
     if (!text) return;
     announcementQueue.push(text);
