@@ -9,7 +9,7 @@ const config = require('./config');
 const connectDB = require('./database/database');
 const authMiddleware = require('./roblox/authMiddleware');
 const VerifiedUser = require('./database/models/VerifiedUser');
-const DispatchSettings = require('./database/models/DispatchSettings'); // <-- Make sure this is imported
+const DispatchSettings = require('./database/models/DispatchSettings');
 
 // Roblox Managers
 const serverManager = require('./roblox/serverManager');
@@ -92,7 +92,8 @@ async function main() {
             }
 
             try {
-                const verifiedUser = await VerifiedUser.findOne({ rob RobloxId: playerId });
+                // *** FIX: Corrected the typo in the findOne query ***
+                const verifiedUser = await VerifiedUser.findOne({ robloxId: playerId });
                 if (!verifiedUser) {
                     return res.status(200).json({ hasRole: false });
                 }
@@ -122,24 +123,19 @@ async function main() {
                 return res.status(400).json({ error: 'Missing required payload fields.' });
             }
 
-            // --- MODIFICATION START ---
-            // Fetch dispatch settings from the database
             const settings = await DispatchSettings.findOne({ guildId: config.discord.guildId });
 
-            // Only queue TTS if it's enabled in the settings
             if (settings && settings.ttsEnabled) {
                 const ttsMessage = settings.ttsMessage
-                    .replace('{player}', playerName)
-                    .replace('{location}', location)
-                    .replace('{status}', status);
+                    .replace(/{player}/g, playerName)
+                    .replace(/{location}/g, location)
+                    .replace(/{status}/g, status);
                 dispatchManager.queueTts(ttsMessage);
             }
-            // --- MODIFICATION END ---
 
             try {
                 const dispatchChannel = await client.channels.fetch(config.moderation.dispatchTextChannelId);
                 if (dispatchChannel) {
-                    // Build the ping content based on the roles in the database
                     const pingContent = (settings && settings.pingRoleIds.length > 0)
                         ? settings.pingRoleIds.map(id => `<@&${id}>`).join(' ')
                         : '';
@@ -163,7 +159,7 @@ async function main() {
                     if (pingContent) {
                         await dispatchChannel.send({ content: pingContent });
                     }
-                    await dispatchChannel.send({ components: [container], flags: MessageFlags.IsComponentsV2 });
+                    await dispatchChannel.send({ components: [container] });
                 }
             } catch (error) {
                 console.error('[Dispatch] Failed to send text alert:', error);
