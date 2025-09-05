@@ -35,7 +35,18 @@ module.exports = {
             .addSubcommand(sub => sub
                 .setName('remove')
                 .setDescription('Removes a role from the dispatch ping list.')
-                .addRoleOption(opt => opt.setName('role').setDescription('The role to remove.').setRequired(true)))),
+                .addRoleOption(opt => opt.setName('role').setDescription('The role to remove.').setRequired(true))))
+        .addSubcommandGroup(group => group
+            .setName('tts')
+            .setDescription('Manages the Text-to-Speech feature.')
+            .addSubcommand(sub => sub
+                .setName('toggle')
+                .setDescription('Enables or disables the TTS announcements.')
+                .addBooleanOption(opt => opt.setName('enabled').setDescription('Set to true to enable, false to disable.').setRequired(true)))
+            .addSubcommand(sub => sub
+                .setName('set-message')
+                .setDescription('Sets the custom message for TTS alerts.')
+                .addStringOption(opt => opt.setName('template').setDescription('The message template. Use {player}, {location}, and {status}.').setRequired(true)))),
 
     async execute(interaction) {
         const settings = await getSettings(interaction.guild.id);
@@ -46,13 +57,19 @@ module.exports = {
         if (subcommand === 'config') {
             const roleMentions = settings.pingRoleIds.length > 0
                 ? settings.pingRoleIds.map(id => `<@&${id}>`).join('\n')
-                : 'No roles are currently configured to be pinged.';
+                : 'None';
 
-            // Build the Display Component V2 message
             const content = [
                 `# Dispatch System Configuration`,
-                `The following roles will be pinged when an "Officer Down" alert is triggered:`,
-                `\n${roleMentions}`
+                `**TTS Status:** ${settings.ttsEnabled ? '✅ Enabled' : '❌ Disabled'}`,
+                `---`,
+                `### Ping Roles`,
+                `The following roles will be pinged for alerts:`,
+                `${roleMentions}`,
+                `---`,
+                `### TTS Message Template`,
+                `\`\`\`md\n${settings.ttsMessage}\n\`\`\``,
+                `_Placeholders: {player}, {location}, {status}_`
             ].join('\n');
             
             const textDisplay = new TextDisplayBuilder().setContent(content);
@@ -86,5 +103,20 @@ module.exports = {
             await settings.save();
             return interaction.editReply(`✅ The role ${role} has been **removed** from the dispatch ping list.`);
         }
+        
+        if (subcommand === 'toggle') {
+            const enabled = interaction.options.getBoolean('enabled');
+            settings.ttsEnabled = enabled;
+            await settings.save();
+            return interaction.editReply(`✅ TTS announcements have been **${enabled ? 'enabled' : 'disabled'}**.`);
+        }
+
+        if (subcommand === 'set-message') {
+            const template = interaction.options.getString('template');
+            settings.ttsMessage = template;
+            await settings.save();
+            return interaction.editReply(`✅ The TTS message template has been updated to:\n\`\`\`${template}\`\`\``);
+        }
     },
 };
+

@@ -9,7 +9,7 @@ const config = require('./config');
 const connectDB = require('./database/database');
 const authMiddleware = require('./roblox/authMiddleware');
 const VerifiedUser = require('./database/models/VerifiedUser');
-const DispatchSettings = require('./database/models/DispatchSettings'); // <-- Import the new model
+const DispatchSettings = require('./database/models/DispatchSettings'); // <-- Make sure this is imported
 
 // Roblox Managers
 const serverManager = require('./roblox/serverManager');
@@ -92,7 +92,7 @@ async function main() {
             }
 
             try {
-                const verifiedUser = await VerifiedUser.findOne({ robloxId: playerId });
+                const verifiedUser = await VerifiedUser.findOne({ rob RobloxId: playerId });
                 if (!verifiedUser) {
                     return res.status(200).json({ hasRole: false });
                 }
@@ -122,21 +122,27 @@ async function main() {
                 return res.status(400).json({ error: 'Missing required payload fields.' });
             }
 
-            const ttsMessage = `Officer down, ${playerName}, at ${location}. Status is ${status}. All units respond.`;
-            dispatchManager.queueTts(ttsMessage);
+            // --- MODIFICATION START ---
+            // Fetch dispatch settings from the database
+            const settings = await DispatchSettings.findOne({ guildId: config.discord.guildId });
+
+            // Only queue TTS if it's enabled in the settings
+            if (settings && settings.ttsEnabled) {
+                const ttsMessage = settings.ttsMessage
+                    .replace('{player}', playerName)
+                    .replace('{location}', location)
+                    .replace('{status}', status);
+                dispatchManager.queueTts(ttsMessage);
+            }
+            // --- MODIFICATION END ---
 
             try {
                 const dispatchChannel = await client.channels.fetch(config.moderation.dispatchTextChannelId);
                 if (dispatchChannel) {
-                    // --- MODIFICATION START ---
-                    // Fetch dispatch settings from the database
-                    const settings = await DispatchSettings.findOne({ guildId: config.discord.guildId });
-
                     // Build the ping content based on the roles in the database
                     const pingContent = (settings && settings.pingRoleIds.length > 0)
                         ? settings.pingRoleIds.map(id => `<@&${id}>`).join(' ')
                         : '';
-                    // --- MODIFICATION END ---
                     
                     const thumbnailUrl = `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${playerId}&size=150x150&format=Png&isCircular=false`;
 
